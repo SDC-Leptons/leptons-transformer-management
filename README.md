@@ -1,4 +1,4 @@
-# ThermoScan: Transformer Thermal Inspection System
+# Leptons: Transformer Thermal Inspection System
 
 [](https://opensource.org/licenses/MIT)
 [](https://www.google.com/search?q=https://github.com/your-username/thermoscan)
