@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { ThermalImageComparison } from "@/components/thermal-image-comparison"
+import { ImageWithAnomalies } from "@/components/image-with-anomalies"
+import { ReferenceImageModal } from "@/components/reference-image-modal"
 import type { ThermalImage } from "@/lib/types"
 
 import type { Inspection } from "@/lib/types";
@@ -21,6 +23,7 @@ export default function InspectionDetailPage() {
   const inspectionId = params.id as string
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
+  const [anomalies, setAnomalies] = useState<any[]>([])
   const [thermalImages, setThermalImages] = useState<ThermalImage[]>([])
   const [baselineImage, setBaselineImage] = useState<ThermalImage | null>(null)
   const [currentImage, setCurrentImage] = useState<ThermalImage | null>(null)
@@ -29,6 +32,9 @@ export default function InspectionDetailPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [environmentalCondition, setEnvironmentalCondition] = useState("sunny")
   const [showComparison, setShowComparison] = useState(false)
+
+  // Modal state for reference image upload
+  const [showRefImageModal, setShowRefImageModal] = useState(false)
 
   useEffect(() => {
     if (inspectionId) {
@@ -39,17 +45,27 @@ export default function InspectionDetailPage() {
 
   const fetchInspection = async () => {
     try {
-          const res = await fetch(`http://localhost:8080/api/inspections/${inspectionId}`)
-          const data = await res.json()
-          setInspection({
-            ...data,
-            transformer_no: data.transformerNumber,
-            inspection_no: data.inspectionNumber,
-            inspected_date: data.inspectionDate,
-            maintainance_date: data.maintainanceDate,
-            baseline_image: data.baselineImage,
-            ref_image: data.refImage,
-          });
+      const res = await fetch(`http://localhost:8080/api/inspections/${inspectionId}`)
+      const data = await res.json()
+      setInspection({
+        ...data,
+        transformer_no: data.transformerNumber,
+        inspection_no: data.inspectionNumber,
+        inspected_date: data.inspectionDate,
+        maintainance_date: data.maintainanceDate,
+        baseline_image: data.baselineImage,
+        ref_image: data.refImage,
+      });
+      // Parse anomalies JSON string if present
+      let parsedAnomalies: any[] = [];
+      if (data.anomalies) {
+        try {
+          parsedAnomalies = typeof data.anomalies === 'string' ? JSON.parse(data.anomalies) : data.anomalies;
+        } catch (e) {
+          parsedAnomalies = [];
+        }
+      }
+      setAnomalies(parsedAnomalies);
       setLoading(false)
     } catch (error) {
       console.error("Failed to fetch inspection:", error)
@@ -176,6 +192,19 @@ export default function InspectionDetailPage() {
   // Helper to check if a string is a valid image URL
   const isValidImage = (url?: string | null) => url && typeof url === "string" && url.trim() !== "";
 
+  // Handle reference image upload with threshold
+  const handleReferenceImageUpload = async ({ file, threshold }: { file: File; threshold: number }) => {
+    const formData = new FormData();
+    formData.append("refImage", file);
+    formData.append("threshold", String(threshold));
+    await fetch(`http://localhost:8080/api/inspections/${inspectionId}/refImage`, {
+      method: "POST",
+      body: formData,
+    });
+    // Refetch inspection data to update UI
+    fetchInspection();
+  };
+
   if (loading || !inspection) {
     return (
       <div className="flex h-screen bg-gray-50">
@@ -279,9 +308,13 @@ export default function InspectionDetailPage() {
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center min-h-[200px]">
                 {isValidImage(inspection.baseline_image) ? (
-                  <a href={inspection.baseline_image!} target="_blank" rel="noopener noreferrer">
-                    <img src={inspection.baseline_image!} alt="Baseline" className="max-h-40 rounded mb-2" />
-                  </a>
+                  <div style={{ width: 400, height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222', borderRadius: 8, overflow: 'hidden' }}>
+                    <img
+                      src={inspection.baseline_image!}
+                      alt="Baseline"
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+                    />
+                  </div>
                 ) : (
                   <div className="text-gray-500 text-center">Baseline not available</div>
                 )}
@@ -291,39 +324,17 @@ export default function InspectionDetailPage() {
             {/* Ref Image Tile */}
             <Card>
               <CardHeader>
-                <CardTitle>Reference Image</CardTitle>
+                <CardTitle>Inspection Image</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center min-h-[200px]">
                 {isValidImage(inspection.ref_image) ? (
-                  <a href={inspection.ref_image!} target="_blank" rel="noopener noreferrer">
-                    <img src={inspection.ref_image!} alt="Reference" className="max-h-40 rounded mb-2" />
-                  </a>
+                  <ImageWithAnomalies imageUrl={inspection.ref_image!} anomalies={anomalies} />
                 ) : (
                   <div className="flex flex-col items-center">
                     <div className="text-gray-500 mb-2">No reference image uploaded</div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const formData = new FormData();
-                        formData.append("refImage", file);
-                        await fetch(`http://localhost:8080/api/inspections/${inspectionId}/refImage`, {
-                          method: "POST",
-                          body: formData,
-                        });
-                        // Optionally, refetch inspection data to update UI
-                        fetchInspection();
-                      }}
-                      className="hidden"
-                      id="ref-image-upload"
-                    />
-                    <label htmlFor="ref-image-upload">
-                      <Button className="bg-indigo-600 hover:bg-indigo-700" asChild>
-                        <span>Upload Reference Image</span>
-                      </Button>
-                    </label>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setShowRefImageModal(true)}>
+                      Upload Reference Image
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -391,6 +402,12 @@ export default function InspectionDetailPage() {
             </CardContent>
           </Card>
         </div>
+        {/* Reference Image Modal */}
+        <ReferenceImageModal
+          open={showRefImageModal}
+          onClose={() => setShowRefImageModal(false)}
+          onSubmit={handleReferenceImageUpload}
+        />
       </div>
     </div>
   )

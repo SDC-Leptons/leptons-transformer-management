@@ -43,13 +43,13 @@ export function TransformersPage() {
       }
       const data_t = await response.json()
       const data = data_t.map((t: any) => ({
-      id: t.id,
-      transformer_no: t.transformerNumber,
-      pole_no: t.poleNumber,
-      region: t.region, 
-      type: t.type,
-      // add other fields if needed
-    }));
+        id: t.id,
+        transformer_no: t.transformerNumber,
+        pole_no: t.poleNumber,
+        region: t.region,
+        type: t.type,
+        // add other fields if needed
+      }));
       setTransformers(data)
       setLoading(false)
     }
