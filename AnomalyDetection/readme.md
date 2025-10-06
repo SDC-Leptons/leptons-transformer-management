@@ -32,7 +32,7 @@ The system uses **YOLOv11**, a state-of-the-art object detection architecture, f
 - End-to-end bounding box and class prediction  
 - Efficient inference for cloud or edge deployment  
 
-![Transformer Diagram](img\Model.png)
+![Transformer Diagram](img/Model.png)
 
 ## Training Configuration
 
