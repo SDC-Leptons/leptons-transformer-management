@@ -24,7 +24,7 @@ The model was trained on 4 distinct anomaly categories and 1 base category:
 
 ## Model Details
 
-![Transformer Diagram](img\yolo_design.jpg)
+![Transformer Diagram](img/yolo_design.jpg)
 
 The system uses **YOLOv11**, a state-of-the-art object detection architecture, for anomaly localization and classification.  
 
