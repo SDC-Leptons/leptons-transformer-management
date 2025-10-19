@@ -1,0 +1,7 @@
+ultralytics>=8.0.180
+roboflow
+boto3
+onnx
+onnxruntime
+numpy
+opencv-python
