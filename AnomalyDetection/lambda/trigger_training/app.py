@@ -17,17 +17,6 @@ def lambda_handler(event, context):
         jobName=job_name,
         jobQueue=job_queue,
         jobDefinition=job_definition,
-        containerOverrides={
-            "command": [
-                "python", "train.py",
-                f"--train_from_s3={body.get('train_from_s3', 'false')}",
-                f"--roboflow_project={body.get('roboflow_project', '')}",
-                f"--roboflow_api_key={body.get('roboflow_api_key', '')}",
-                f"--model={body.get('model', 'yolov8n.pt')}",
-                f"--epochs={body.get('epochs', '20')}",
-                f"--output_bucket={body.get('output_bucket', 'my-yolo-trained-models')}"
-            ]
-        }
     )
 
     return {
