@@ -5,6 +5,7 @@ from ultralytics import YOLO
 from roboflow import Roboflow
 
 sys.path.append("utils")
+from download_corrections import download_recorrected_annotations
 from s3_utils import download_from_s3, upload_to_s3
 
 def main():
@@ -27,12 +28,13 @@ def main():
 
     # Step 1: Download dataset
     if train_from_s3 == "true":
-        print("📦 Downloading dataset from S3...")
+        print("Downloading dataset from S3...")
         download_from_s3(dataset_s3_bucket, dataset_s3_key, "dataset/data.zip")
         os.system("unzip -q dataset/data.zip -d dataset")
+        download_recorrected_annotations()
         dataset_path = "dataset"
     else:
-        print("🌐 Downloading dataset from Roboflow...")
+        print("Downloading dataset from Roboflow...")
         rf = Roboflow(api_key=roboflow_api_key)
         project = rf.workspace(roboflow_workspace).project(roboflow_project)
         dataset = project.version(roboflow_version).download("yolov11")
