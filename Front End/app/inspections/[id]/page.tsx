@@ -1,17 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Upload, Eye, Trash2, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Eye, Trash2, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { ThermalImageComparison } from "@/components/thermal-image-comparison"
 import { ImageWithAnomalies } from "@/components/image-with-anomalies"
 import { ReferenceImageModal } from "@/components/reference-image-modal"
+import { EditAnomalyModal } from "@/components/edit-anomaly-modal"
 import type { ThermalImage } from "@/lib/types"
 
 import type { Inspection } from "@/lib/types";
@@ -24,6 +23,7 @@ export default function InspectionDetailPage() {
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [anomalies, setAnomalies] = useState<any[]>([])
+  const [anomaliesLog, setAnomaliesLog] = useState<any[]>([])
   const [thermalImages, setThermalImages] = useState<ThermalImage[]>([])
   const [baselineImage, setBaselineImage] = useState<ThermalImage | null>(null)
   const [currentImage, setCurrentImage] = useState<ThermalImage | null>(null)
@@ -35,6 +35,11 @@ export default function InspectionDetailPage() {
 
   // Modal state for reference image upload
   const [showRefImageModal, setShowRefImageModal] = useState(false)
+  
+  // Modal state for editing anomaly
+  const [showEditAnomalyModal, setShowEditAnomalyModal] = useState(false)
+  const [editingAnomaly, setEditingAnomaly] = useState<any | null>(null)
+  const [highlightedAnomalyId, setHighlightedAnomalyId] = useState<string | null>(null)
 
   useEffect(() => {
     if (inspectionId) {
@@ -61,11 +66,29 @@ export default function InspectionDetailPage() {
       if (data.anomalies) {
         try {
           parsedAnomalies = typeof data.anomalies === 'string' ? JSON.parse(data.anomalies) : data.anomalies;
+          console.log('=== ANOMALIES DEBUG ===');
+          console.log('Raw anomalies from backend:', data.anomalies);
+          console.log('Parsed anomalies:', parsedAnomalies);
+          if (parsedAnomalies.length > 0) {
+            console.log('First anomaly box format [x1, y1, x2, y2]:', parsedAnomalies[0].box);
+            console.log('First anomaly full data:', parsedAnomalies[0]);
+          }
         } catch (e) {
+          console.error('Failed to parse anomalies:', e);
           parsedAnomalies = [];
         }
       }
       setAnomalies(parsedAnomalies);
+      // Parse anomaliesLog if present
+      let parsedLogs: any[] = [];
+      if (data.anomaliesLog) {
+        try {
+          parsedLogs = typeof data.anomaliesLog === 'string' ? JSON.parse(data.anomaliesLog) : data.anomaliesLog;
+        } catch (e) {
+          parsedLogs = [];
+        }
+      }
+      setAnomaliesLog(parsedLogs);
       setLoading(false)
     } catch (error) {
       console.error("Failed to fetch inspection:", error)
@@ -189,6 +212,24 @@ export default function InspectionDetailPage() {
     }
   }
 
+  // Helpers for the Activity Log section
+  const formatTimestamp = (ts?: string) => {
+    if (!ts) return '-'
+    const d = new Date(ts)
+    return d.toLocaleString('en-GB', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const getLogRowClasses = (entry: any) => {
+    const action = String(entry?.action || '').toLowerCase()
+    const madeBy = String(entry?.madeBy || '').toLowerCase()
+    // 4 colors: add by AI (blue), add manually (green), edit (amber), delete (rose)
+    if (action === 'add' && madeBy === 'ai') return 'bg-blue-50 border-blue-200'
+    if (action === 'add') return 'bg-green-50 border-green-200'
+    if (action === 'edit' || action === 'update') return 'bg-amber-50 border-amber-200'
+    if (action === 'delete' || action === 'remove') return 'bg-rose-50 border-rose-200'
+    return 'bg-gray-50 border-gray-200'
+  }
+
   // Helper to check if a string is a valid image URL
   const isValidImage = (url?: string | null) => url && typeof url === "string" && url.trim() !== "";
 
@@ -203,6 +244,108 @@ export default function InspectionDetailPage() {
     });
     // Refetch inspection data to update UI
     fetchInspection();
+  };
+
+  // Handle download anomalies as text file
+  const handleDownloadAnomalies = () => {
+    let content = `Inspection Anomalies Report\n`;
+    content += `==============================\n\n`;
+    content += `Inspection No: ${inspection?.inspection_no || 'N/A'}\n`;
+    content += `Transformer No: ${inspection?.transformer_no || 'N/A'}\n`;
+    content += `Inspection Date: ${inspection?.inspected_date || 'N/A'}\n`;
+    content += `Status: ${inspection?.status || 'N/A'}\n`;
+    content += `Generated: ${new Date().toLocaleString('en-GB')}\n\n`;
+
+    content += `==============================\n`;
+    content += `CURRENT ANOMALIES\n`;
+    content += `==============================\n\n`;
+
+    if (anomalies && anomalies.length > 0) {
+      anomalies.forEach((anomaly, idx) => {
+        content += `Anomaly #${idx + 1}\n`;
+        content += `  ID: ${anomaly.id || 'N/A'}\n`;
+        content += `  Class: ${anomaly.class || 'Unknown'}\n`;
+        content += `  Confidence: ${typeof anomaly.confidence === 'number' ? (anomaly.confidence * 100).toFixed(2) + '%' : 'N/A'}\n`;
+        content += `  Made By: ${anomaly.madeBy || 'Unknown'}\n`;
+        content += `  Bounding Box: [${Array.isArray(anomaly.box) ? anomaly.box.map((v: number) => v.toFixed(2)).join(', ') : 'N/A'}]\n`;
+        content += `\n`;
+      });
+    } else {
+      content += `No current anomalies detected.\n\n`;
+    }
+
+    content += `==============================\n`;
+    content += `ACTIVITY LOG\n`;
+    content += `==============================\n\n`;
+
+    if (anomaliesLog && anomaliesLog.length > 0) {
+      anomaliesLog.forEach((entry, idx) => {
+        content += `Log Entry #${idx + 1}\n`;
+        content += `  Anomaly ID: ${entry.id || 'N/A'}\n`;
+        content += `  Class: ${entry.class || 'Unknown'}\n`;
+        content += `  Action: ${entry.action || 'N/A'}\n`;
+        content += `  Made By: ${entry.madeBy || 'Unknown'}\n`;
+        content += `  Confidence: ${typeof entry.confidence === 'number' ? (entry.confidence * 100).toFixed(2) + '%' : 'N/A'}\n`;
+        content += `  Bounding Box: [${Array.isArray(entry.box) ? entry.box.map((v: number) => v.toFixed(2)).join(', ') : 'N/A'}]\n`;
+        content += `  Timestamp: ${formatTimestamp(entry.timestamp)}\n`;
+        content += `\n`;
+      });
+    } else {
+      content += `No activity log entries.\n\n`;
+    }
+
+    // Create blob and download
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `anomalies-${inspection?.inspection_no || inspectionId}-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Handle delete anomaly
+  const handleDeleteAnomaly = async (anomalyId: string) => {
+    try {
+      await fetch(`http://localhost:8080/api/inspections/${inspectionId}/anomalies/${anomalyId}`, {
+        method: "DELETE",
+      });
+      // Refetch inspection data to update UI
+      fetchInspection();
+    } catch (error) {
+      console.error("Failed to delete anomaly:", error);
+    }
+  };
+
+  // Handle edit anomaly
+  const handleEditAnomaly = (anomaly: any) => {
+    setEditingAnomaly(anomaly);
+    setShowEditAnomalyModal(true);
+  };
+
+  // Handle update anomaly
+  const handleUpdateAnomaly = async (updatedAnomaly: { box: [number, number, number, number]; class: string }) => {
+    if (!editingAnomaly?.id) return;
+    try {
+      await fetch(`http://localhost:8080/api/inspections/${inspectionId}/anomalies/${editingAnomaly.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          box: updatedAnomaly.box,
+          class: updatedAnomaly.class,
+          confidence: editingAnomaly.confidence, // Keep existing confidence
+          madeBy: editingAnomaly.madeBy, // Keep existing madeBy
+        }),
+      });
+      setShowEditAnomalyModal(false);
+      setEditingAnomaly(null);
+      // Refetch inspection data to update UI
+      fetchInspection();
+    } catch (error) {
+      console.error("Failed to update anomaly:", error);
+    }
   };
 
   if (loading || !inspection) {
@@ -328,7 +471,23 @@ export default function InspectionDetailPage() {
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center min-h-[200px]">
                 {isValidImage(inspection.ref_image) ? (
-                  <ImageWithAnomalies imageUrl={inspection.ref_image!} anomalies={anomalies} />
+                  <ImageWithAnomalies
+                    imageUrl={inspection.ref_image!}
+                    anomalies={anomalies}
+                    onAnomalyAdded={async (anomaly) => {
+                      // POST to backend
+                      await fetch(`http://localhost:8080/api/inspections/${inspectionId}/anomalies`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(anomaly),
+                      });
+                      // Refetch anomalies
+                      fetchInspection();
+                    }}
+                     onEditAnomaly={handleEditAnomaly}
+                     onDeleteAnomaly={handleDeleteAnomaly}
+                     highlightedAnomalyId={highlightedAnomalyId}
+                  />
                 ) : (
                   <div className="flex flex-col items-center">
                     <div className="text-gray-500 mb-2">No reference image uploaded</div>
@@ -341,72 +500,158 @@ export default function InspectionDetailPage() {
             </Card>
           </div>
 
-          {/* Progress Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100">
-                    <Upload className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Thermal Image Upload</span>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
-                        Pending
-                      </Badge>
+          {/* Anomalies Section */}
+          {anomalies && anomalies.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Detected Anomalies</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {anomalies.filter(a => a.class !== 'Normal').map((anomaly, idx, arr) => {
+                    const COLORS = [
+                      '#ff5252', '#4caf50', '#2196f3', '#ff9800',
+                      '#9c27b0', '#00bcd4', '#8bc34a', '#e91e63',
+                    ];
+                    const color = COLORS[idx % COLORS.length];
+                    const isHighlighted = highlightedAnomalyId && anomaly.id && highlightedAnomalyId === anomaly.id;
+                    return (
+                    <div
+                      key={anomaly.id || idx}
+                      className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-colors ${
+                        isHighlighted ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-gray-50'
+                      }`}
+                      onClick={() => setHighlightedAnomalyId(anomaly.id || null)}
+                    >
+                      <div className="flex items-center gap-2 flex-1">
+                        <span style={{
+                          display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: color,
+                        }} />
+                        <span className="font-semibold">{anomaly.class}</span>
+                        <span className="ml-3 text-sm text-gray-500">
+                          Confidence: {(anomaly.confidence * 100).toFixed(1)}%
+                        </span>
+                        <span className="ml-3 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                          {anomaly.madeBy || 'Unknown'}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500 mr-4">
+                        Box: [{anomaly.box.map((v: number) => v.toFixed(1)).join(', ')}]
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          title="Edit"
+                          onClick={(e) => { e.stopPropagation(); handleEditAnomaly(anomaly); }}
+                          disabled={!anomaly.id}
+                        >
+                          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                          </svg>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          title="Delete"
+                          onClick={(e) => { e.stopPropagation(); anomaly.id && handleDeleteAnomaly(anomaly.id); }}
+                          disabled={!anomaly.id}
+                        >
+                          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                            <line x1="10" y1="11" x2="10" y2="17"/>
+                            <line x1="14" y1="11" x2="14" y2="17"/>
+                          </svg>
+                        </Button>
+                        <Button variant="outline" size="sm" title="Refresh">
+                          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <path d="M1 20a11 11 0 0 0 17.9-4"/>
+                            <polyline points="1 20 1 14 7 14"/>
+                            <path d="M23 4a11 11 0 0 0-17.9 4"/>
+                          </svg>
+                        </Button>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-                      <div className="bg-yellow-500 h-1 rounded-full w-0"></div>
-                    </div>
-                  </div>
+                  )})}
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                    <Eye className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">AI Analysis</span>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
-                        Pending
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-                      <div className="bg-gray-300 h-1 rounded-full w-0"></div>
-                    </div>
-                  </div>
+          {/* Activity Log Section */}
+          {anomaliesLog && anomaliesLog.length > 0 && (
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Activity Log</CardTitle>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleDownloadAnomalies}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download Anomalies
+                  </Button>
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                    <AlertTriangle className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Thermal Image Review</span>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
-                        Pending
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-                      <div className="bg-gray-300 h-1 rounded-full w-0"></div>
-                    </div>
-                  </div>
+              </CardHeader>
+              <CardContent>
+                {/* Legend */}
+                <div className="flex flex-wrap gap-3 mb-3 text-xs">
+                  <span className="px-2 py-1 rounded bg-blue-100 text-blue-700">Added by AI</span>
+                  <span className="px-2 py-1 rounded bg-green-100 text-green-700">Added manually</span>
+                  <span className="px-2 py-1 rounded bg-amber-100 text-amber-700">Edited</span>
+                  <span className="px-2 py-1 rounded bg-rose-100 text-rose-700">Deleted</span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-2">
+                  {anomaliesLog.map((entry, idx) => (
+                    <div key={`${entry?.logId ?? ''}-${entry?.id ?? 'noid'}-${entry?.timestamp ?? 'notime'}-${entry?.action ?? 'noaction'}-${idx}`}
+                         className={`p-3 rounded border ${getLogRowClasses(entry)}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="text-sm font-medium">{entry.class || '—'}</span>
+                          <span className="text-xs text-gray-500">ID: {entry.id}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 capitalize">{entry.madeBy || 'user'}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 capitalize">{entry.action || 'change'}</span>
+                          {typeof entry.confidence === 'number' && (
+                            <span className="text-xs text-gray-500">Conf: {(entry.confidence * 100).toFixed(1)}%</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {formatTimestamp(entry.timestamp)}
+                        </div>
+                      </div>
+                      {Array.isArray(entry.box) && entry.box.length === 4 && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          Box: [{entry.box.map((v: number) => (typeof v === 'number' ? v.toFixed(2) : String(v))).join(', ')}]
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
         {/* Reference Image Modal */}
         <ReferenceImageModal
           open={showRefImageModal}
           onClose={() => setShowRefImageModal(false)}
           onSubmit={handleReferenceImageUpload}
+        />
+        {/* Edit Anomaly Modal */}
+        <EditAnomalyModal
+          open={showEditAnomalyModal}
+          onClose={() => {
+            setShowEditAnomalyModal(false);
+            setEditingAnomaly(null);
+          }}
+          onUpdate={handleUpdateAnomaly}
+          imageUrl={inspection.ref_image || ''}
+          anomaly={editingAnomaly}
         />
       </div>
     </div>

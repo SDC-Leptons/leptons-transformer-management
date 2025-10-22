@@ -7,8 +7,22 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
 
 export default function SettingsPage() {
+  const handleRetrain = () => {
+    // Fire and forget - don't wait for response
+    fetch('/api/retrain', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }).catch((error) => {
+      console.error('Retrain request failed:', error)
+    })
+    
+    toast.success('Retraining process initiated')
+  }
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -116,6 +130,25 @@ export default function SettingsPage() {
                     <p className="text-sm text-gray-500">Enhanced security for user accounts</p>
                   </div>
                   <Switch />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI Model Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Model Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Model Retraining</Label>
+                  <p className="text-sm text-gray-500 mb-3">Initiate retraining process for the anomaly detection model</p>
+                  <Button 
+                    onClick={handleRetrain}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    Retrain Model
+                  </Button>
                 </div>
               </CardContent>
             </Card>

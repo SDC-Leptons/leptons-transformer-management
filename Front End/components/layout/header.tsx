@@ -4,6 +4,10 @@ import { Bell, Menu, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
+import { useUser } from "@/hooks/useUser"
+import { toast } from "@/hooks/use-toast"
 
 interface HeaderProps {
   title: string
@@ -12,6 +16,19 @@ interface HeaderProps {
 }
 
 export function Header({ title, searchPlaceholder, onSearch }: HeaderProps) {
+  const router = useRouter()
+  const { user } = useUser()
+
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      toast({ title: "Sign out failed", description: error.message })
+      return
+    }
+    toast({ title: "Signed out" })
+    router.replace("/login")
+  }
+
   return (
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       <div className="flex items-center gap-4">
@@ -40,12 +57,15 @@ export function Header({ title, searchPlaceholder, onSearch }: HeaderProps) {
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
             <AvatarImage src="/placeholder.svg?height=32&width=32" />
-            <AvatarFallback>OQ</AvatarFallback>
+            <AvatarFallback>{user?.email?.[0]?.toUpperCase() ?? "U"}</AvatarFallback>
           </Avatar>
           <div className="text-sm">
-            <div className="font-medium">Olivera Queen</div>
-            <div className="text-gray-500">olivera@gmail.com</div>
+            <div className="font-medium">{user?.email?.split("@")[0] ?? "User"}</div>
+            <div className="text-gray-500">{user?.email ?? ""}</div>
           </div>
+          <Button variant="outline" size="sm" onClick={handleSignOut} className="ml-2">
+            Sign out
+          </Button>
         </div>
       </div>
     </header>

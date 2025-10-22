@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   generator: "v0.app",
 }
 
+import AuthGuard from '@/components/AuthGuard';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,7 +28,9 @@ html {
 }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthGuard>{children}</AuthGuard>
+      </body>
     </html>
   )
 }

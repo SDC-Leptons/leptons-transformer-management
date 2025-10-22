@@ -1,6 +1,6 @@
 "use client"
 
-import { Settings, Zap } from "lucide-react"
+import { Settings, Zap, Wrench } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,12 @@ export function Sidebar() {
       href: "/transformers",
       icon: Zap,
       current: pathname === "/" || pathname === "/transformers" || pathname.startsWith("/transformers"),
+    },
+    {
+      name: "Maintenance",
+      href: "/maintenances",
+      icon: Wrench,
+      current: pathname === "/maintenances" || pathname.startsWith("/maintenances"),
     },
     {
       name: "Settings",

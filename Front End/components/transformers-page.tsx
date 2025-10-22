@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Search, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,6 +21,8 @@ export function TransformersPage() {
   const [regionFilter, setRegionFilter] = useState("All Regions")
   const [typeFilter, setTypeFilter] = useState("All Types")
   const [showAddModal, setShowAddModal] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   useEffect(() => {
     fetchTransformers()
@@ -48,8 +51,10 @@ export function TransformersPage() {
         pole_no: t.poleNumber,
         region: t.region,
         type: t.type,
-        // add other fields if needed
+        capacity: t.capacity,
       }));
+      // Sort by ID in descending order (newer first)
+      data.sort((a: Transformer, b: Transformer) => b.id - a.id);
       setTransformers(data)
       setLoading(false)
     }
@@ -83,36 +88,120 @@ export function TransformersPage() {
   }
 
   const handleAddTransformer = async (data: any) => {
-    // Prevent duplicate transformer numbers
-    const enteredNo = data.transformer_no?.trim().toLowerCase();
-    const exists = transformers.some(t => t.transformer_no?.trim().toLowerCase() === enteredNo);
-    if (exists) {
-      alert("Transformer number already exists. Please enter a unique number.");
-      return;
-    }
     try {
-      const formData = new FormData();
-      formData.append("transformerNumber", data.transformer_no);
-      formData.append("poleNumber", data.pole_no);
-      formData.append("region", data.region);
-      formData.append("type", data.type);
+      console.log("Creating transformer with data:", data);
+      
+      // Check if there's a baseline image
+      if (data.baselineImage) {
+        // If there's an image, we need to use FormData
+        const formData = new FormData();
+        formData.append("poleNumber", data.pole_no);
+        formData.append("region", data.region);
+        formData.append("type", data.type);
+        
+        if (data.location_details) {
+          formData.append("locationDetails", data.location_details);
+        }
+        if (data.capacity) {
+          formData.append("capacity", data.capacity.toString());
+        }
+        formData.append("baselineImage", data.baselineImage);
 
-      const response = await fetch("http://localhost:8080/api/transformers", {
-        method: "POST",
-        body: formData,
-      });
+        console.log("Sending FormData with image");
 
-      if (response.ok) {
-        fetchTransformers();
-        setShowAddModal(false);
+        try {
+          const response = await fetch("http://localhost:8080/api/transformers", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log("Transformer created with number:", result.transformerNumber);
+            fetchTransformers();
+            setShowAddModal(false);
+          } else {
+            const responseText = await response.text();
+            console.error("Backend error response:", responseText);
+            try {
+              const error = JSON.parse(responseText);
+              const errorMessage = error.message || error.error || error.details || 'Unknown error';
+              alert(`Backend Error (${response.status}): ${errorMessage}`);
+            } catch {
+              alert(`Backend Error (${response.status}): ${responseText || 'Unknown error'}`);
+            }
+          }
+        } catch (fetchError) {
+          console.error("Network error:", fetchError);
+          alert("Cannot connect to backend server. Please ensure:\n1. Backend is running on http://localhost:8080\n2. CORS is properly configured\n3. Network connection is stable");
+          throw fetchError; // Re-throw to be caught by outer catch
+        }
+      } else {
+        // No image - send JSON
+        const requestBody = {
+          poleNumber: data.pole_no,
+          region: data.region,
+          type: data.type,
+          ...(data.location_details && { locationDetails: data.location_details }),
+          ...(data.capacity && { capacity: parseFloat(data.capacity) }),
+        };
+
+        console.log("Sending JSON:", requestBody);
+
+        try {
+          const response = await fetch("http://localhost:8080/api/transformers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log("Transformer created with number:", result.transformerNumber);
+            fetchTransformers();
+            setShowAddModal(false);
+          } else {
+            const responseText = await response.text();
+            console.error("Backend error response:", responseText);
+            try {
+              const error = JSON.parse(responseText);
+              const errorMessage = error.message || error.error || error.details || 'Unknown error';
+              alert(`Backend Error (${response.status}): ${errorMessage}`);
+            } catch {
+              alert(`Backend Error (${response.status}): ${responseText || 'Unknown error'}`);
+            }
+          }
+        } catch (fetchError) {
+          console.error("Network error:", fetchError);
+          alert("Cannot connect to backend server. Please ensure:\n1. Backend is running on http://localhost:8080\n2. CORS is properly configured\n3. Network connection is stable");
+          throw fetchError; // Re-throw to be caught by outer catch
+        }
       }
     } catch (error) {
       console.error("Failed to add transformer:", error);
+      alert("Failed to add transformer. Please try again.");
     }
   }
 
   const regions = Array.from(new Set(transformers.map((t) => t.region)))
   const types = Array.from(new Set(transformers.map((t) => t.type)))
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredTransformers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedTransformers = filteredTransformers.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, regionFilter, typeFilter])
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -209,11 +298,11 @@ export function TransformersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12"></TableHead>
                   <TableHead>Transformer No. ↓</TableHead>
                   <TableHead>Pole No.</TableHead>
                   <TableHead>Region</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Capacity (kVA)</TableHead>
                   <TableHead className="text-right">View</TableHead>
                 </TableRow>
               </TableHeader>
@@ -231,17 +320,21 @@ export function TransformersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTransformers.map((transformer, index) => (
+                  paginatedTransformers.map((transformer, index) => (
                     <TableRow key={transformer.id}>
-                      <TableCell>
-                        <Star
-                          className={`h-4 w-4 ${index === 0 ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
-                        />
-                      </TableCell>
                       <TableCell className="font-medium">{transformer.transformer_no}</TableCell>
                       <TableCell>{transformer.pole_no}</TableCell>
                       <TableCell>{transformer.region}</TableCell>
-                      <TableCell>{transformer.type}</TableCell>
+                      <TableCell>
+                        {transformer.type === "Bulk" ? (
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-700">Bulk</Badge>
+                        ) : transformer.type === "Distribution" ? (
+                          <Badge variant="secondary" className="bg-green-100 text-green-700">Distribution</Badge>
+                        ) : (
+                          <Badge variant="secondary">{transformer.type}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{transformer.capacity ?? "-"}</TableCell>
                       <TableCell className="text-right">
                         <Link href={`/transformers/${transformer.id}`}>
                           <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
@@ -257,33 +350,57 @@ export function TransformersPage() {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <Button variant="outline" size="sm" className="bg-indigo-600 text-white">
-              1
-            </Button>
-            <Button variant="outline" size="sm">
-              2
-            </Button>
-            <Button variant="outline" size="sm">
-              3
-            </Button>
-            <Button variant="outline" size="sm">
-              4
-            </Button>
-            <Button variant="outline" size="sm">
-              5
-            </Button>
-            <Button variant="outline" size="sm">
-              6
-            </Button>
-            <span className="text-gray-500">...</span>
-            <Button variant="outline" size="sm">
-              50
-            </Button>
-            <Button variant="outline" size="sm">
-              →
-            </Button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                ←
+              </Button>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // Show first page, last page, current page, and pages around current
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <Button
+                      key={page}
+                      variant="outline"
+                      size="sm"
+                      className={currentPage === page ? "bg-indigo-600 text-white" : ""}
+                      onClick={() => handlePageChange(page)}
+                    >
+                      {page}
+                    </Button>
+                  )
+                } else if (page === currentPage - 2 || page === currentPage + 2) {
+                  return <span key={page} className="text-gray-500">...</span>
+                }
+                return null
+              })}
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                →
+              </Button>
+            </div>
+          )}
+          
+          {filteredTransformers.length > 0 && (
+            <div className="text-center text-sm text-gray-500 mt-2">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredTransformers.length)} of {filteredTransformers.length} transformers
+            </div>
+          )}
         </div>
       </div>
 

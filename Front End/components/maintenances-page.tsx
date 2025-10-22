@@ -9,14 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
-import AddInspectionModal from "@/components/add-inspection-modal"
-import type { Inspection, Transformer } from "@/lib/types"
+import AddMaintenanceModal from "@/components/add-maintenance-modal"
+import type { Maintenance } from "@/lib/types"
 import Link from "next/link"
 
-export function InspectionsPage() {
-  const [inspections, setInspections] = useState<Inspection[]>([])
-  const [transformers, setTransformers] = useState<Transformer[]>([])
-  const [filteredInspections, setFilteredInspections] = useState<Inspection[]>([])
+export function MaintenancesPage() {
+  const [maintenances, setMaintenances] = useState<Maintenance[]>([])
+  const [filteredMaintenances, setFilteredMaintenances] = useState<Maintenance[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All Time")
@@ -25,147 +24,107 @@ export function InspectionsPage() {
   const itemsPerPage = 10
 
   useEffect(() => {
-    fetchInspections()
-    fetchTransformers()
+    fetchMaintenances()
   }, [])
 
   useEffect(() => {
-    filterInspections()
-  }, [inspections, searchTerm, statusFilter])
+    filterMaintenances()
+  }, [maintenances, searchTerm, statusFilter])
 
-  const fetchInspections = async () => {
+  const fetchMaintenances = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/inspections")
+      const response = await fetch("/api/maintenance")
       if (!response.ok) {
-        throw new Error("Failed to fetch inspections")
+        throw new Error("Failed to fetch maintenance records")
       }
-      const data_t = await response.json()
-      console.log("Raw inspection data from backend:", data_t)
-      const data = data_t.map((ins: any) => {
-        const mapped = {
-          id: ins.iid || ins.id,
-          inspection_no: ins.inspectionNumber || ins.inspection_no,
-          transformer_no: ins.transformerNumber || ins.transformer_no,
-          inspected_date: ins.inspectionDate || ins.inspected_date,
-          maintainance_date: ins.maintainanceDate || ins.maintainance_date,
-          status: ins.status,
-        };
-        console.log("Mapped inspection:", mapped);
-        return mapped;
-      });
-      // Sort by ID in descending order (newer first)
-      data.sort((a: Inspection, b: Inspection) => b.id - a.id);
-      setInspections(data)
+      let data = await response.json()
+      console.log("Raw maintenance data from backend:", data)
+      // Map created_at to timestamp for UI compatibility and parse electricalReadings if needed
+      data = data.map((m: any) => ({
+        ...m,
+        timestamp: m.created_at,
+        electricalReadings: typeof m.electricalReadings === 'string' ? JSON.parse(m.electricalReadings) : m.electricalReadings
+      }))
+      // Sort by mid in descending order (newer first)
+      data.sort((a: Maintenance, b: Maintenance) => b.mid - a.mid)
+      setMaintenances(data)
       setLoading(false)
     } catch (error) {
-      console.error("Failed to fetch inspections:", error)
+      console.error("Failed to fetch maintenance records:", error)
       setLoading(false)
     }
   }
 
-  const fetchTransformers = async () => {
-    try {
-      const response = await fetch("http://localhost:8080/api/transformers")
-      if (!response.ok) {
-        throw new Error("Failed to fetch transformers")
-      }
-      const data_t = await response.json()
-      const data = data_t.map((t: any) => ({
-      id: t.id,
-      transformer_no: t.transformerNumber,
-      pole_no: t.poleNumber,
-      region: t.region, 
-      type: t.type,
-      // add other fields if needed
-    }));
-      setTransformers(data)
-    } catch (error) {
-      console.error("Failed to fetch transformers:", error)
-    }
-  }
-
-  const filterInspections = () => {
-    let filtered = [...inspections]
+  const filterMaintenances = () => {
+    let filtered = [...maintenances]
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (i) =>
-          i.inspection_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (i.transformer_no?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
+        (m) =>
+          m.maintenanceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          m.inspectionNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          m.inspectorName.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
     if (statusFilter !== "All Time") {
-      filtered = filtered.filter((i) => i.status === statusFilter)
+      filtered = filtered.filter((m) => m.status.toLowerCase() === statusFilter.toLowerCase())
     }
 
-    setFilteredInspections(filtered)
+    setFilteredMaintenances(filtered)
   }
 
-
-
-  const handleAddInspection = async (data: any) => {
+  const handleAddMaintenance = async (data: any) => {
     try {
-      console.log("Creating inspection with data:", data);
-      
-      const formData = new FormData();
-      // inspectionNumber is not needed - backend auto-generates
-      formData.append("transformerNumber", data.transformer_no);
-      formData.append("inspectionDate", data.inspected_date);
-      formData.append("maintainanceDate", data.maintainance_date);
-      formData.append("status", data.status || "Pending");
-      if (data.branch) {
-        formData.append("branch", data.branch);
-      }
+      console.log("Creating maintenance with data:", data)
 
-      console.log("FormData contents:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
-      const response = await fetch("http://localhost:8080/api/inspections", {
+      const response = await fetch("/api/maintenance", {
         method: "POST",
-        body: formData,
-      });
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      })
 
       if (response.ok) {
-        const result = await response.json();
-        console.log("Full response from backend:", result);
-        console.log("Inspection created with number:", result.inspectionNumber || result.inspection_no);
-        await fetchInspections();
-        setShowAddModal(false);
+        const result = await response.json()
+        console.log("Maintenance created:", result)
+        await fetchMaintenances()
+        setShowAddModal(false)
       } else {
-        const responseText = await response.text();
-        console.error("Backend error response:", responseText);
+        const responseText = await response.text()
+        console.error("Backend error response:", responseText)
         try {
-          const error = JSON.parse(responseText);
-          const errorMessage = error.message || error.error || error.details || 'Unknown error';
-          alert(`Backend Error (${response.status}): ${errorMessage}`);
+          const error = JSON.parse(responseText)
+          const errorMessage = error.message || error.error || error.details || 'Unknown error'
+          alert(`Backend Error (${response.status}): ${errorMessage}`)
         } catch {
-          alert(`Backend Error (${response.status}): ${responseText || 'Unknown error'}`);
+          alert(`Backend Error (${response.status}): ${responseText || 'Unknown error'}`)
         }
       }
     } catch (error) {
-      console.error("Failed to add inspection:", error);
-      alert("Failed to add inspection. Please try again.");
+      console.error("Failed to add maintenance:", error)
+      alert("Failed to add maintenance. Please try again.")
     }
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Completed":
+    const normalizedStatus = status.toLowerCase()
+    switch (normalizedStatus) {
+      case "completed":
         return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+          <Badge variant="secondary" className="bg-green-100 text-green-700">
             Completed
           </Badge>
         )
-      case "In Progress":
+      case "in-progress":
+      case "in progress":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-700">
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
             In Progress
           </Badge>
         )
-      case "Pending":
+      case "pending":
         return (
           <Badge variant="secondary" className="bg-red-100 text-red-700">
             Pending
@@ -177,20 +136,21 @@ export function InspectionsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    // Format as YYYY-MM-DD
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    if (!dateString) return "-"
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    const hours = String(date.getHours()).padStart(2, "0")
+    const minutes = String(date.getMinutes()).padStart(2, "0")
+    return `${year}-${month}-${day} ${hours}:${minutes}`
   }
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredInspections.length / itemsPerPage)
+  const totalPages = Math.ceil(filteredMaintenances.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const paginatedInspections = filteredInspections.slice(startIndex, endIndex)
+  const paginatedMaintenances = filteredMaintenances.slice(startIndex, endIndex)
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
@@ -205,45 +165,40 @@ export function InspectionsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 flex flex-col">
-        <Header title="Transformer > All Inspections" />
+        <Header title="Maintenance > All Records" />
 
         <div className="flex-1 p-6">
           {/* Navigation Tabs */}
           <div className="flex items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded bg-indigo-600 text-white text-sm font-medium">
-                I
+                M
               </div>
-              <h2 className="text-lg font-semibold">All Inspections</h2>
+              <h2 className="text-lg font-semibold">All Maintenance Records</h2>
             </div>
             <Button onClick={() => setShowAddModal(true)} className="bg-indigo-600 hover:bg-indigo-700">
               <Plus className="h-4 w-4 mr-2" />
-              Add Inspection
+              Add Maintenance
             </Button>
-            <div className="ml-auto flex gap-2">
-              <Link href="/transformers">
-                <Button variant="outline">Transformers</Button>
-              </Link>
-              <Button className="bg-indigo-600">Inspections</Button>
-            </div>
           </div>
 
           {/* Filters */}
           <div className="flex items-center gap-4 mb-6">
-            <Select defaultValue="By Transformer No">
+            <Select defaultValue="By Maintenance No">
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="By Transformer No">By Transformer No</SelectItem>
+                <SelectItem value="By Maintenance No">By Maintenance No</SelectItem>
                 <SelectItem value="By Inspection No">By Inspection No</SelectItem>
+                <SelectItem value="By Inspector">By Inspector</SelectItem>
               </SelectContent>
             </Select>
 
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
-                placeholder="Search Transformer"
+                placeholder="Search Maintenance Records"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -260,13 +215,16 @@ export function InspectionsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All Time">All Time</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
 
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => {
+              setSearchTerm("")
+              setStatusFilter("All Time")
+            }}>
               Reset Filters
             </Button>
           </div>
@@ -276,10 +234,10 @@ export function InspectionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Transformer No. ↓</TableHead>
+                  <TableHead>Maintenance No. ↓</TableHead>
                   <TableHead>Inspection No</TableHead>
-                  <TableHead>Inspected Date</TableHead>
-                  <TableHead>Maintainance Date</TableHead>
+                  <TableHead>Inspector Name</TableHead>
+                  <TableHead>Timestamp</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">View</TableHead>
                 </TableRow>
@@ -291,24 +249,22 @@ export function InspectionsPage() {
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filteredInspections.length === 0 ? (
+                ) : filteredMaintenances.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8">
-                      No inspections found
+                      No maintenance records found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedInspections.map((inspection, index) => (
-                    <TableRow key={inspection.id}>
-                      <TableCell className="font-medium">{inspection.transformer_no}</TableCell>
-                      <TableCell>{inspection.inspection_no}</TableCell>
-                      <TableCell>{formatDate(inspection.inspected_date)}</TableCell>
-                      <TableCell>
-                        {formatDate(inspection.maintainance_date)}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(inspection.status)}</TableCell>
+                  paginatedMaintenances.map((maintenance) => (
+                    <TableRow key={maintenance.mid}>
+                      <TableCell className="font-medium">{maintenance.maintenanceNumber}</TableCell>
+                      <TableCell>{maintenance.inspectionNumber}</TableCell>
+                      <TableCell>{maintenance.inspectorName}</TableCell>
+                      <TableCell>{formatDate(maintenance.timestamp)}</TableCell>
+                      <TableCell>{getStatusBadge(maintenance.status)}</TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/inspections/${inspection.id}`}>
+                        <Link href={`/maintenances/${maintenance.mid}`}>
                           <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
                             View
                           </Button>
@@ -368,19 +324,18 @@ export function InspectionsPage() {
             </div>
           )}
           
-          {filteredInspections.length > 0 && (
+          {filteredMaintenances.length > 0 && (
             <div className="text-center text-sm text-gray-500 mt-2">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredInspections.length)} of {filteredInspections.length} inspections
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredMaintenances.length)} of {filteredMaintenances.length} maintenance records
             </div>
           )}
         </div>
       </div>
 
-      <AddInspectionModal
+      <AddMaintenanceModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={handleAddInspection}
-        transformers={transformers}
+        onSubmit={handleAddMaintenance}
       />
     </div>
   )

@@ -94,7 +94,7 @@ export default function TransformerDetailPage() {
 
   const fetchAllTransformers = async () => {
     try {
-      const response = await fetch("/api/transformers")
+      const response = await fetch("http://localhost:8080/api/transformers")
       const data = await response.json()
       // Map to TransformerWithBaseline[]
       const mapped = data.map((t: any) => ({
@@ -118,20 +118,37 @@ export default function TransformerDetailPage() {
 
   const handleAddInspection = async (data: any) => {
     try {
-      const response = await fetch("/api/inspections", {
+      const formData = new FormData();
+      formData.append("transformerNumber", data.transformer_no);
+      formData.append("inspectionDate", data.inspected_date);
+      formData.append("maintainanceDate", data.maintainance_date);
+      formData.append("status", data.status || "Pending");
+      if (data.branch) {
+        formData.append("branch", data.branch);
+      }
+
+      const response = await fetch("http://localhost:8080/api/inspections", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          transformer_id: transformerId,
-        }),
-      })
+        body: formData,
+      });
 
       if (response.ok) {
-        setShowAddModal(false)
+        setShowAddModal(false);
+        await fetchTransformer(); // Refresh inspections after adding
+      } else {
+        const responseText = await response.text();
+        console.error("Backend error response:", responseText);
+        try {
+          const error = JSON.parse(responseText);
+          const errorMessage = error.message || error.error || error.details || 'Unknown error';
+          alert(`Backend Error (${response.status}): ${errorMessage}`);
+        } catch {
+          alert(`Backend Error (${response.status}): ${responseText || 'Unknown error'}`);
+        }
       }
     } catch (error) {
-      console.error("Failed to add inspection:", error)
+      console.error("Failed to add inspection:", error);
+      alert("Failed to add inspection. Please try again.");
     }
   }
 
@@ -369,7 +386,6 @@ export default function TransformerDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12"></TableHead>
                   <TableHead>Inspection No ↓</TableHead>
                   <TableHead>Inspected Date</TableHead>
                   <TableHead>Maintenance Date</TableHead>
@@ -393,11 +409,6 @@ export default function TransformerDetailPage() {
                 ) : (
                   inspections.map((inspection, index) => (
                     <TableRow key={inspection.id}>
-                      <TableCell>
-                        <Star
-                          className={`h-4 w-4 ${index === 0 ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
-                        />
-                      </TableCell>
                       <TableCell className="font-medium">{inspection.inspection_no}</TableCell>
                       <TableCell>{formatDate(inspection.inspected_date)}</TableCell>
                       <TableCell>
@@ -425,6 +436,7 @@ export default function TransformerDetailPage() {
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddInspection}
         transformers={transformers as any}
+        defaultTransformerNo={transformer?.transformer_no}
       />
 
       <BaselineImageModal

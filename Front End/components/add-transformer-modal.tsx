@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,58 +20,49 @@ interface AddTransformerModalProps {
 const AddTransformerModal: React.FC<AddTransformerModalProps> = ({ open, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     region: "",
-    transformer_no: "",
     pole_no: "",
     type: "",
     location_details: "",
     capacity: "",
   })
-  const [existingTransformerNumbers, setExistingTransformerNumbers] = useState<string[]>([])
-  const [warning, setWarning] = useState("")
-
-  useEffect(() => {
-    // Fetch all transformer numbers when modal opens
-    if (open) {
-      fetch("http://localhost:8080/api/transformers")
-        .then((res) => res.json())
-        .then((data) => {
-          setExistingTransformerNumbers(data.map((t: any) => t.transformerNumber?.toLowerCase?.() || ""))
-        })
-        .catch(() => setExistingTransformerNumbers([]))
-    }
-  }, [open])
+  const [baselineImage, setBaselineImage] = useState<File | null>(null)
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }))
-    // If the transformer_no is being changed, clear the warning
-    if (field === "transformer_no" && warning) {
-      setWarning("")
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setBaselineImage(e.target.files[0])
     }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const enteredNo = formData.transformer_no.trim().toLowerCase()
-    if (existingTransformerNumbers.includes(enteredNo)) {
-      setWarning("Transformer number already exists. Please enter a unique number.")
-      return
+    
+    // Validate required fields
+    if (!formData.region || !formData.pole_no || !formData.type) {
+      alert("Please fill in all required fields: Region, Pole No, and Type");
+      return;
     }
-    setWarning("")
+    
     onSubmit({
       ...formData,
       capacity: formData.capacity ? Number.parseFloat(formData.capacity) : undefined,
+      baselineImage: baselineImage,
     })
+    // Reset form
     setFormData({
       region: "",
-      transformer_no: "",
       pole_no: "",
       type: "",
       location_details: "",
       capacity: "",
     })
+    setBaselineImage(null)
   }
 
   return (
@@ -88,10 +79,10 @@ const AddTransformerModal: React.FC<AddTransformerModalProps> = ({ open, onClose
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="region">Regions</Label>
-            <Select value={formData.region} onValueChange={(value) => handleChange("region", value)}>
+            <Label htmlFor="region">Region <span className="text-red-500">*</span></Label>
+            <Select value={formData.region} onValueChange={(value) => handleChange("region", value)} required>
               <SelectTrigger>
-                <SelectValue placeholder="Region" />
+                <SelectValue placeholder="Select Region" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Nugegoda">Nugegoda</SelectItem>
@@ -103,21 +94,7 @@ const AddTransformerModal: React.FC<AddTransformerModalProps> = ({ open, onClose
           </div>
 
           <div>
-            <Label htmlFor="transformer_no">Transformer No</Label>
-            <Input
-              id="transformer_no"
-              placeholder="Transformer No"
-              value={formData.transformer_no}
-              onChange={(e) => handleChange("transformer_no", e.target.value)}
-              required
-            />
-            {warning && (
-              <div className="text-red-600 text-xs mt-1">{warning}</div>
-            )}
-          </div>
-
-          <div>
-            <Label htmlFor="pole_no">Pole No</Label>
+            <Label htmlFor="pole_no">Pole No <span className="text-red-500">*</span></Label>
             <Input
               id="pole_no"
               placeholder="Pole No"
@@ -128,10 +105,10 @@ const AddTransformerModal: React.FC<AddTransformerModalProps> = ({ open, onClose
           </div>
 
           <div>
-            <Label htmlFor="type">Type</Label>
-            <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
+            <Label htmlFor="type">Type <span className="text-red-500">*</span></Label>
+            <Select value={formData.type} onValueChange={(value) => handleChange("type", value)} required>
               <SelectTrigger>
-                <SelectValue placeholder="Type" />
+                <SelectValue placeholder="Select Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Bulk">Bulk</SelectItem>
@@ -163,8 +140,21 @@ const AddTransformerModal: React.FC<AddTransformerModalProps> = ({ open, onClose
             />
           </div>
 
+          <div>
+            <Label htmlFor="baselineImage">Baseline Image (Optional)</Label>
+            <Input
+              id="baselineImage"
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+            />
+            {baselineImage && (
+              <div className="text-xs text-gray-600 mt-1">Selected: {baselineImage.name}</div>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-4">
-            <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700" disabled={!!warning}>
+            <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700">
               Confirm
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>

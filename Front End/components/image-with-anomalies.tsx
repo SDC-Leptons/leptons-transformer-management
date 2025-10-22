@@ -1,18 +1,28 @@
 import React from "react";
 import { Stage, Layer, Rect, Text, Group, Image as KonvaImage } from "react-konva";
+import { AddAnomalyModal } from "@/components/add-anomaly-modal";
+import { Plus, Maximize2 } from "lucide-react";
 
 interface Anomaly {
   box: [number, number, number, number];
   confidence: number;
   class: string;
+  id?: string;
+  madeBy?: "AI" | "User";
 }
 
 interface ImageWithAnomaliesProps {
   imageUrl: string;
   anomalies: Anomaly[];
+  onAnomalyAdded?: (anomaly: Anomaly) => void;
+  onEditAnomaly?: (anomaly: Anomaly) => void;
+  onDeleteAnomaly?: (anomalyId: string) => void;
+  highlightedAnomalyId?: string | null;
 }
 
-export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl, anomalies }) => {
+export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl, anomalies, onAnomalyAdded, onEditAnomaly, onDeleteAnomaly, highlightedAnomalyId }) => {
+  // Modal state for add anomaly
+  const [showAddModal, setShowAddModal] = React.useState(false);
   const [image, setImage] = React.useState<HTMLImageElement | null>(null);
   const [imgScale, setImgScale] = React.useState(1);
   const [imgPos, setImgPos] = React.useState({ x: 0, y: 0 });
@@ -20,6 +30,17 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
   const imageRef = React.useRef<any>(null);
   const STAGE_WIDTH = 400;
   const STAGE_HEIGHT = 300;
+
+  const COLORS = [
+    "#ff5252", // red
+    "#4caf50", // green
+    "#2196f3", // blue
+    "#ff9800", // orange
+    "#9c27b0", // purple
+    "#00bcd4", // cyan
+    "#8bc34a", // light green
+    "#e91e63", // pink
+  ];
 
   // Helper to fit image to frame
   const getFittedScaleAndPos = (img: HTMLImageElement) => {
@@ -43,6 +64,15 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
       const { scale, pos } = getFittedScaleAndPos(img);
       setImgScale(scale);
       setImgPos(pos);
+      console.log('=== IMAGE WITH ANOMALIES DEBUG ===');
+      console.log('Image natural size:', img.width, 'x', img.height);
+      console.log('Canvas size:', STAGE_WIDTH, 'x', STAGE_HEIGHT);
+      console.log('Calculated scale:', scale);
+      console.log('Image position offset:', pos);
+      console.log('Anomalies received:', anomalies);
+      if (anomalies && anomalies.length > 0) {
+        console.log('First anomaly box (should be [x, y, width, height] in original image pixels):', anomalies[0].box);
+      }
     };
   }, [imageUrl]);
 
@@ -136,8 +166,68 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
     }
   };
 
+  // Add anomaly handler
+  const handleAddAnomaly = async (anomaly: { box: [number, number, number, number]; class: string }) => {
+    // Optionally, call API to add anomaly here
+    if (onAnomalyAdded) {
+      onAnomalyAdded({ ...anomaly, confidence: 1 });
+    }
+    // You may want to POST to backend here
+    setShowAddModal(false);
+  };
+
   return (
-    <div>
+    <div style={{ position: 'relative', width: STAGE_WIDTH, height: STAGE_HEIGHT }}>
+      {/* Floating Add Anomaly Button (top right) */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          zIndex: 10,
+          background: '#fff',
+          border: '1px solid #bbb',
+          borderRadius: '50%',
+          width: 36,
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          cursor: 'pointer',
+        }}
+        title="Add Anomaly"
+      >
+        <Plus size={20} />
+      </button>
+
+      {/* Floating Reset Zoom Button (bottom right) */}
+      <button
+        onClick={handleResetZoom}
+        style={{
+          position: 'absolute',
+          bottom: 12,
+          right: 12,
+          zIndex: 10,
+          background: '#fff',
+          border: '1px solid #bbb',
+          borderRadius: '50%',
+          width: 36,
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          cursor: image ? 'pointer' : 'not-allowed',
+          opacity: image ? 1 : 0.5,
+        }}
+        title="Reset Zoom"
+        disabled={!image}
+      >
+        <Maximize2 size={18} />
+      </button>
+
       <Stage
         width={STAGE_WIDTH}
         height={STAGE_HEIGHT}
@@ -194,72 +284,70 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
               />
             </Group>
           )}
-          {!showNoAnomalies && filteredAnomalies.map((anomaly, idx) => (
-            <Group key={idx}>
-              <Rect
-                x={anomaly.box[0] * imgScale + imgPos.x}
-                y={anomaly.box[1] * imgScale + imgPos.y}
-                width={(anomaly.box[2] - anomaly.box[0]) * imgScale}
-                height={(anomaly.box[3] - anomaly.box[1]) * imgScale}
-                stroke="red"
-                strokeWidth={3}
-              />
-              <Text
-                text={`${anomaly.class} (${(anomaly.confidence * 100).toFixed(1)}%)`}
-                x={anomaly.box[0] * imgScale + imgPos.x}
-                y={anomaly.box[1] * imgScale + imgPos.y - 24}
-                fontSize={18}
-                fill="yellow"
-                fontStyle="bold"
-              />
-            </Group>
-          ))}
+          {!showNoAnomalies && filteredAnomalies.map((anomaly, idx) => {
+            const color = COLORS[idx % COLORS.length];
+            const isHighlighted = highlightedAnomalyId && anomaly.id && highlightedAnomalyId === anomaly.id;
+            if (!image) return null;
+
+            // Backend returns [x_center, y_center, width, height]
+            // Convert to [x1, y1, x2, y2] (two corner points in original image pixels)
+            const [x_center, y_center, width, height] = anomaly.box;
+            const x1 = x_center - width / 2;
+            const y1 = y_center - height / 2;
+            const x2 = x_center + width / 2;
+            const y2 = y_center + height / 2;
+            const x = x1;
+            const y = y1;
+            const w = x2 - x1;
+            const h = y2 - y1;
+
+            // Scale to match the displayed image size and add offset
+            const displayX = x * imgScale + imgPos.x;
+            const displayY = y * imgScale + imgPos.y;
+            const displayW = w * imgScale;
+            const displayH = h * imgScale;
+
+            // Enhanced debug logging for backend vs user-drawn anomalies
+            if (idx === 0) {
+              console.log('=== Rendering anomaly #0 ===');
+              console.log('  Source:', anomaly.madeBy || 'unknown');
+              console.log('  Original box (x_center,y_center,width,height):', anomaly.box);
+              console.log('  Converted to x1,y1,x2,y2:', x1, y1, x2, y2);
+              console.log('  Converted to x,y,w,h:', x, y, w, h);
+              console.log('  Image natural size:', image.width, 'x', image.height);
+              console.log('  imgScale:', imgScale);
+              console.log('  imgPos:', imgPos);
+              console.log('  Displayed image size:', image.width * imgScale, 'x', image.height * imgScale);
+              console.log('  Final canvas box:', { x: displayX, y: displayY, width: displayW, height: displayH });
+            }
+
+            return (
+              <Group key={anomaly.id || idx}>
+                <Rect
+                  x={displayX}
+                  y={displayY}
+                  width={displayW}
+                  height={displayH}
+                  stroke={color}
+                  strokeWidth={isHighlighted ? 5 : 3}
+                  opacity={isHighlighted ? 1 : 0.9}
+                />
+              </Group>
+            );
+          })}
         </Layer>
       </Stage>
-      {/* Reset Zoom Button */}
-      <div style={{ marginTop: 10, textAlign: 'right' }}>
-        <button
-          onClick={handleResetZoom}
-          style={{
-            padding: '6px 16px',
-            background: '#f3f3f3',
-            border: '1px solid #bbb',
-            borderRadius: 4,
-            cursor: image ? 'pointer' : 'not-allowed',
-            fontWeight: 500,
-            color: '#222',
-            marginBottom: 8,
-          }}
-          disabled={!image}
-        >
-          Reset Zoom
-        </button>
-      </div>
-      {/* Anomaly List Below Image */}
-      {(anomalies && anomalies.length > 0) && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 'bold', marginBottom: 8 }}>Anomalies</div>
-          <div style={{ border: '1px solid #eee', borderRadius: 4, overflow: 'hidden' }}>
-            {anomalies.map((anomaly, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid #eee', background: anomaly.class === 'Normal' ? '#f6f6f6' : '#fff' }}>
-                <span style={{ flex: 1, fontWeight: 500 }}>{anomaly.class}</span>
-                <span style={{ flex: 2, color: '#666', fontSize: 13 }}>Box: [{anomaly.box.map((v: number) => v.toFixed(1)).join(', ')}]</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button title="Edit" style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 3, background: '#f5f5f5', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                  </button>
-                  <button title="Delete" style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 3, background: '#f5f5f5', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                  </button>
-                  <button title="Refresh" style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 3, background: '#f5f5f5', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M1 20a11 11 0 0 0 17.9-4"/><polyline points="1 20 1 14 7 14"/><path d="M23 4a11 11 0 0 0-17.9 4"/></svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
+      {/* Add Anomaly Modal */}
+      <AddAnomalyModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddAnomaly}
+        imageUrl={imageUrl}
+        existingAnomalies={anomalies}
+        onEditAnomaly={onEditAnomaly}
+        onDeleteAnomaly={onDeleteAnomaly}
+      />
     </div>
   );
 };

@@ -23,85 +23,129 @@ interface AddInspectionModalProps {
   onClose: () => void
   onSubmit: (data: any) => void
   transformers: Transformer[]
+  defaultTransformerNo?: string
 }
 
 
-const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, onSubmit, transformers }) => {
+const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, onSubmit, transformers, defaultTransformerNo }) => {
   const [formData, setFormData] = useState({
     branch: "",
     transformer_no: "",
-    transformer_no_search: "",
     inspected_date: "",
     maintainance_date: "",
-    inspection_no: "",
     status: "Pending",
   })
-  const [transformerLocked, setTransformerLocked] = useState(false)
-  const [existingInspectionNumbers, setExistingInspectionNumbers] = useState<string[]>([])
-  const [warning, setWarning] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [validationError, setValidationError] = useState("")
 
+  // Pre-select transformer if defaultTransformerNo is provided
   useEffect(() => {
-    if (open) {
-      fetch("http://localhost:8080/api/inspections")
-        .then((res) => res.json())
-        .then((data) => {
-          setExistingInspectionNumbers(data.map((i: any) => i.inspectionNumber?.toLowerCase?.() || ""))
-        })
-        .catch(() => setExistingInspectionNumbers([]))
+    if (open && defaultTransformerNo) {
+      const selectedTransformer = transformers.find(t => t && t.transformer_no === defaultTransformerNo);
+      if (selectedTransformer) {
+        const now = new Date();
+        const currentDate = now.toISOString().split("T")[0];
+        
+        setFormData({
+          branch: selectedTransformer.region || "",
+          transformer_no: defaultTransformerNo,
+          inspected_date: currentDate,
+          maintainance_date: currentDate,
+          status: "Pending",
+        });
+        
+        // Set search input to just the number part
+        setSearchInput(defaultTransformerNo.replace(/^T-/, ''));
+        setValidationError("");
+      }
+    } else if (!open) {
+      // Reset form when modal closes
+      setFormData({
+        branch: "",
+        transformer_no: "",
+        inspected_date: "",
+        maintainance_date: "",
+        status: "Pending",
+      });
+      setSearchInput("");
+      setValidationError("");
     }
-  }, [open])
+  }, [open, defaultTransformerNo, transformers]);
+
+  // Filter transformers based on search (only search the number part after "T-")
+  const filteredTransformers = transformers.filter(t => {
+    if (!t || !t.transformer_no) return false;
+    // Extract the number part after "T-"
+    const numberPart = t.transformer_no.replace(/^T-/, '');
+    return numberPart.includes(searchInput);
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const enteredNo = formData.inspection_no.trim().toLowerCase()
-    if (existingInspectionNumbers.includes(enteredNo)) {
-      setWarning("Inspection number already exists. Please enter a unique number.")
-      return
+    
+    // Validate that selected transformer exists
+    const isValid = transformers.some(t => t && t.transformer_no === formData.transformer_no);
+    if (!isValid) {
+      setValidationError("Please select a valid transformer from the list");
+      return;
     }
-    setWarning("")
+    
+    setValidationError("");
+    
+    // Backend will auto-generate inspectionNumber
     onSubmit({
       transformer_no: formData.transformer_no,
       inspected_date: formData.inspected_date,
       maintainance_date: formData.maintainance_date,
       branch: formData.branch,
-      inspection_no: formData.inspection_no,
+      status: formData.status || "Pending", // Default to "Pending" if not selected
     })
-    setFormData({
-      branch: "",
-      transformer_no: "",
-      transformer_no_search: "",
-      inspected_date: "",
-      maintainance_date: "",
-      inspection_no: "",
-      status: "Pending",
-    })
+    
+    // Form will be reset by useEffect when modal closes
+  }
+
+  const handleTransformerSelect = (transformerNo: string) => {
+    const selectedTransformer = transformers.find(t => t && t.transformer_no === transformerNo);
+    const now = new Date();
+    const currentDate = now.toISOString().split("T")[0];
+    
+    setFormData(prev => ({
+      ...prev,
+      transformer_no: transformerNo,
+      branch: selectedTransformer?.region || prev.branch || "",
+      inspected_date: prev.inspected_date || currentDate,
+      maintainance_date: prev.maintainance_date || currentDate,
+    }));
+    
+    // Set search input to just the number part
+    setSearchInput(transformerNo.replace(/^T-/, ''));
+    setShowDropdown(false);
+    setValidationError("");
+  }
+
+  const handleSearchChange = (value: string) => {
+    // Only allow numbers
+    const numericValue = value.replace(/[^0-9]/g, '');
+    setSearchInput(numericValue);
+    setShowDropdown(true);
+    
+    // Check if the full transformer number exists
+    const fullTransformerNo = `T-${numericValue}`;
+    const exists = transformers.some(t => t && t.transformer_no === fullTransformerNo);
+    
+    if (numericValue && exists) {
+      handleTransformerSelect(fullTransformerNo);
+    } else if (numericValue) {
+      setFormData(prev => ({ ...prev, transformer_no: "" }));
+    }
   }
 
   const handleChange = (field: string, value: string) => {
-    setFormData((prev) => {
-      if (field === "transformer_no") {
-        const selectedTransformer = transformers.find(t => t && t.transformer_no === value);
-        setTransformerLocked(true);
-        const now = new Date();
-        const currentDate = now.toISOString().split("T")[0];
-        return {
-          ...prev,
-          transformer_no: value,
-          transformer_no_search: value,
-          branch: selectedTransformer && selectedTransformer.region ? selectedTransformer.region : "",
-          inspected_date: prev.inspected_date === "" ? currentDate : prev.inspected_date,
-          maintainance_date: prev.maintainance_date === "" ? currentDate : prev.maintainance_date,
-        };
-      }
-      if (field === "transformer_no_search") {
-        setTransformerLocked(false);
-        return { ...prev, transformer_no_search: value, transformer_no: "" };
-      }
-      return { ...prev, [field]: value ?? "" };
-    });
-    if (field === "inspection_no" && warning) {
-      setWarning("")
-    }
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value ?? "",
+    }));
   }
 
   const now = new Date()
@@ -120,19 +164,6 @@ const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, 
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="inspection_no">Inspection No</Label>
-            <Input
-              id="inspection_no"
-              value={formData.inspection_no}
-              onChange={(e) => handleChange("inspection_no", e.target.value)}
-              placeholder="Enter inspection number"
-              required
-            />
-            {warning && (
-              <div className="text-red-600 text-xs mt-1">{warning}</div>
-            )}
-          </div>
-          <div>
             <Label htmlFor="branch">Branch</Label>
             <Select value={formData.branch} onValueChange={(value) => handleChange("branch", value)}>
               <SelectTrigger>
@@ -147,14 +178,50 @@ const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, 
             </Select>
           </div>
           <div>
-            <Label htmlFor="transformer_no">Transformer No</Label>
-            <Input
-              id="transformer_no"
-              value={formData.transformer_no}
-              onChange={(e) => handleChange("transformer_no", e.target.value)}
-              placeholder="Enter transformer number"
-              required
-            />
+            <Label htmlFor="transformer_no">Transformer No <span className="text-red-500">*</span></Label>
+            <div className="relative">
+              <div className="flex items-center border rounded-md focus-within:ring-2 focus-within:ring-indigo-500">
+                <span className="px-3 py-2 text-gray-500 bg-gray-100 border-r">T-</span>
+                <input
+                  type="text"
+                  value={formData.transformer_no ? formData.transformer_no.replace(/^T-/, '') : searchInput}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Type transformer number"
+                  className="flex-1 px-3 py-2 outline-none rounded-r-md"
+                  required
+                />
+              </div>
+              
+              {showDropdown && filteredTransformers.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                  {filteredTransformers.map((transformer) => (
+                    <div
+                      key={transformer.id}
+                      onClick={() => handleTransformerSelect(transformer.transformer_no)}
+                      className="px-4 py-2 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0"
+                    >
+                      <div className="font-medium">{transformer.transformer_no}</div>
+                      <div className="text-sm text-gray-500">
+                        {transformer.region} - {transformer.pole_no}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {formData.transformer_no && (
+                <div className="mt-1 text-sm text-green-600">
+                  ✓ Selected: {formData.transformer_no}
+                </div>
+              )}
+              
+              {validationError && (
+                <div className="mt-1 text-sm text-red-600">
+                  {validationError}
+                </div>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -190,7 +257,7 @@ const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, 
             <Label htmlFor="status">Status</Label>
             <Select value={formData.status || "Pending"} onValueChange={(value) => handleChange("status", value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Pending (Default)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Pending">Pending</SelectItem>
@@ -200,7 +267,7 @@ const AddInspectionModal: React.FC<AddInspectionModalProps> = ({ open, onClose, 
             </Select>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700" disabled={!!warning}>
+            <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700">
               Confirm
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>
