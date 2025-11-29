@@ -1,5 +1,6 @@
 package com.example.transformer_app.controller;
 
+import com.example.transformer_app.dto.UpdateMaintenanceRequest;
 import com.example.transformer_app.service.MaintenanceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,28 +121,21 @@ public class MaintenanceController {
      * }
      */
     @PatchMapping("/{mid}")
-    public ResponseEntity<String> updateMaintenance(@PathVariable Long mid, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<String> updateMaintenance(@PathVariable Long mid, @RequestBody UpdateMaintenanceRequest request) {
         try {
-            String inspectorName = (String) request.get("inspectorName");
-            String status = (String) request.get("status");
-            Map<String, Object> electricalReadings = (Map<String, Object>) request.get("electricalReadings");
-            String recommendedActions = (String) request.get("recommendedActions");
-            String additionalRemarks = (String) request.get("additionalRemarks");
-
-            return maintenanceService.updateMaintenance(
-                    mid,
-                    inspectorName,
-                    status,
-                    electricalReadings,
-                    recommendedActions,
-                    additionalRemarks
-            );
+            return maintenanceService.updateMaintenance(mid, request);
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("Error updating maintenance: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("{\"error\": \"" + e.getMessage() + "\"}");
         }
+    }
+
+    @PutMapping("/{mid}")
+    public ResponseEntity<String> replaceMaintenance(@PathVariable Long mid, @RequestBody UpdateMaintenanceRequest request) {
+        // For now, treat PUT the same as PATCH and delegate to the same logic
+        return updateMaintenance(mid, request);
     }
 
     /**

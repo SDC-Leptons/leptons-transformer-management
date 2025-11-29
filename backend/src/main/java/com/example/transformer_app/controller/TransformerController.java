@@ -13,6 +13,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,6 +42,20 @@ public class TransformerController {
         HttpHeaders headers = getHeaders();
         String url = supabaseUrl + "/rest/v1/transformers?select=*";
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    }
+
+    // New: get transformers by transformerNumber (dedicated endpoint, like inspections/by-transformer)
+    @GetMapping("/by-number/{transformerNumber}")
+    public ResponseEntity<String> getByTransformerNumber(@PathVariable String transformerNumber) {
+        try {
+            HttpHeaders headers = getHeaders();
+            String url = supabaseUrl + "/rest/v1/transformers?transformerNumber=eq." + transformerNumber + "&select=*";
+            return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"error\":\"Failed to fetch transformer: " + e.getMessage() + "\"}");
+        }
     }
 
     // Create transformer - accepts both JSON and multipart/form-data
@@ -111,9 +127,9 @@ public class TransformerController {
     }
 
 
-    // Get transformer by ID
+    // Get transformer by numeric ID, and include its inspections
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable String id) {
+    public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
         HttpHeaders headers = getHeaders();
 
         // 1. Get transformer by ID
@@ -157,9 +173,6 @@ public class TransformerController {
         HttpHeaders headers = new HttpHeaders();
         headers.set("apikey", supabaseApiKey);
         headers.set("Authorization", "Bearer " + supabaseApiKey);
-//        headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-//        headers.set("Pragma", "no-cache");
-//        headers.set("Expires", "0");
         return headers;
     }
 }

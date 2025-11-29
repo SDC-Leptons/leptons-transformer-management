@@ -1,5 +1,6 @@
 package com.example.transformer_app.service;
 
+import com.example.transformer_app.dto.UpdateMaintenanceRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,6 +117,64 @@ public class MaintenanceService {
         if (electricalReadings != null) updateFields.put("electricalReadings", electricalReadings);
         if (recommendedActions != null) updateFields.put("recommendedActions", recommendedActions);
         if (additionalRemarks != null) updateFields.put("additionalRemarks", additionalRemarks);
+
+        String url = supabaseUrl + "/rest/v1/maintenance?mid=eq." + mid;
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(updateFields, headers);
+
+        return restTemplate.exchange(url, HttpMethod.PATCH, requestEntity, String.class);
+    }
+
+    public ResponseEntity<String> updateMaintenance(Long mid, UpdateMaintenanceRequest request) throws IOException {
+        Map<String, Object> existingMaintenance = getMaintenanceByIdInternal(mid);
+        if (existingMaintenance == null) {
+            throw new RuntimeException("Maintenance record with MID " + mid + " not found");
+        }
+
+        HttpHeaders headers = getHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Prefer", "return=representation");
+
+        Map<String, Object> updateFields = new HashMap<>();
+        if (request.getInspectorName() != null) updateFields.put("inspectorName", request.getInspectorName());
+        if (request.getStatus() != null) updateFields.put("status", request.getStatus());
+        if (request.getRecommendedActions() != null) updateFields.put("recommendedActions", request.getRecommendedActions());
+        if (request.getAdditionalRemarks() != null) updateFields.put("additionalRemarks", request.getAdditionalRemarks());
+
+        // Merge existing details with incoming details payload
+        Object existingDetailsObj = existingMaintenance.get("details");
+        Map<String, Object> mergedDetails = new HashMap<>();
+        if (existingDetailsObj instanceof Map) {
+            mergedDetails.putAll((Map<String, Object>) existingDetailsObj);
+        }
+
+        // If frontend sent a full `details` object, overlay it on top
+        if (request.getDetails() != null) {
+            mergedDetails.putAll(request.getDetails());
+        } else {
+            // Fallback: support old style where fields are at the top level
+            if (request.getBranch() != null) mergedDetails.put("branch", request.getBranch());
+            if (request.getLocationDetails() != null) mergedDetails.put("locationDetails", request.getLocationDetails());
+            if (request.getInspectionDate() != null) mergedDetails.put("inspectionDate", request.getInspectionDate());
+            if (request.getInspectionTime() != null) mergedDetails.put("inspectionTime", request.getInspectionTime());
+            if (request.getBaseLineImagingNos() != null) mergedDetails.put("baseLineImagingNos", request.getBaseLineImagingNos());
+            if (request.getLastMonthKVA() != null) mergedDetails.put("lastMonthKVA", request.getLastMonthKVA());
+            if (request.getLastMonthDate() != null) mergedDetails.put("lastMonthDate", request.getLastMonthDate());
+            if (request.getLastMonthTime() != null) mergedDetails.put("lastMonthTime", request.getLastMonthTime());
+            if (request.getCurrentMonthKVA() != null) mergedDetails.put("currentMonthKVA", request.getCurrentMonthKVA());
+            if (request.getBaseLineCondition() != null) mergedDetails.put("baseLineCondition", request.getBaseLineCondition());
+            if (request.getTransformerType() != null) mergedDetails.put("transformerType", request.getTransformerType());
+            if (request.getMeterDetails() != null) mergedDetails.put("meterDetails", request.getMeterDetails());
+            if (request.getWorkContent() != null) mergedDetails.put("workContent", request.getWorkContent());
+            if (request.getFirstInspectionReadings() != null) mergedDetails.put("firstInspectionReadings", request.getFirstInspectionReadings());
+            if (request.getSecondInspectionReadings() != null) mergedDetails.put("secondInspectionReadings", request.getSecondInspectionReadings());
+            if (request.getAfterThermalDate() != null) mergedDetails.put("afterThermalDate", request.getAfterThermalDate());
+            if (request.getAfterThermalTime() != null) mergedDetails.put("afterThermalTime", request.getAfterThermalTime());
+            if (request.getFuseStatus() != null) mergedDetails.put("fuseStatus", request.getFuseStatus());
+        }
+
+        if (!mergedDetails.isEmpty()) {
+            updateFields.put("details", mergedDetails);
+        }
 
         String url = supabaseUrl + "/rest/v1/maintenance?mid=eq." + mid;
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(updateFields, headers);

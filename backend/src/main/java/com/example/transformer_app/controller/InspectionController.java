@@ -71,6 +71,28 @@ public class InspectionController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/by-number/{inspectionNumber}")
+    public ResponseEntity<String> getInspectionByNumber(@PathVariable String inspectionNumber) {
+        try {
+            return inspectionService.getInspectionByNumber(inspectionNumber);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"error\":\"Failed to fetch inspection: " + e.getMessage() + "\"}");
+        }
+    }
+
+    @GetMapping("/by-transformer/{transformerNumber}")
+    public ResponseEntity<String> getInspectionsByTransformerNumber(@PathVariable String transformerNumber) {
+        try {
+            return inspectionService.getInspectionsByTransformerNumber(transformerNumber);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"error\":\"Failed to fetch inspections: " + e.getMessage() + "\"}");
+        }
+    }
+
     @PostMapping(consumes = {"multipart/form-data"})
     public ResponseEntity<String> createInspection(
             @RequestParam(value = "transformerNumber", required = false) String transformerNumber,

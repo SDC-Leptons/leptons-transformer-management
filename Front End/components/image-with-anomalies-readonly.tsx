@@ -1,7 +1,6 @@
 import React from "react";
 import { Stage, Layer, Rect, Text, Group, Image as KonvaImage } from "react-konva";
-import { AddAnomalyModal } from "@/components/add-anomaly-modal";
-import { Plus, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 
 interface Anomaly {
   box: [number, number, number, number];
@@ -11,18 +10,17 @@ interface Anomaly {
   madeBy?: "AI" | "User";
 }
 
-interface ImageWithAnomaliesProps {
+interface ImageWithAnomaliesReadOnlyProps {
   imageUrl: string;
   anomalies: Anomaly[];
-  onAnomalyAdded?: (anomaly: Anomaly) => void;
-  onEditAnomaly?: (anomaly: Anomaly) => void;
-  onDeleteAnomaly?: (anomalyId: string) => void;
   highlightedAnomalyId?: string | null;
 }
 
-export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl, anomalies, onAnomalyAdded, onEditAnomaly, onDeleteAnomaly, highlightedAnomalyId }) => {
-  // Modal state for add anomaly
-  const [showAddModal, setShowAddModal] = React.useState(false);
+export const ImageWithAnomaliesReadOnly: React.FC<ImageWithAnomaliesReadOnlyProps> = ({ 
+  imageUrl, 
+  anomalies, 
+  highlightedAnomalyId 
+}) => {
   const [image, setImage] = React.useState<HTMLImageElement | null>(null);
   const [imgScale, setImgScale] = React.useState(1);
   const [imgPos, setImgPos] = React.useState({ x: 0, y: 0 });
@@ -64,15 +62,6 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
       const { scale, pos } = getFittedScaleAndPos(img);
       setImgScale(scale);
       setImgPos(pos);
-      console.log('=== IMAGE WITH ANOMALIES DEBUG ===');
-      console.log('Image natural size:', img.width, 'x', img.height);
-      console.log('Canvas size:', STAGE_WIDTH, 'x', STAGE_HEIGHT);
-      console.log('Calculated scale:', scale);
-      console.log('Image position offset:', pos);
-      console.log('Anomalies received:', anomalies);
-      if (anomalies && anomalies.length > 0) {
-        console.log('First anomaly box (should be [x, y, width, height] in original image pixels):', anomalies[0].box);
-      }
     };
   }, [imageUrl]);
 
@@ -166,42 +155,8 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
     }
   };
 
-  // Add anomaly handler
-  const handleAddAnomaly = async (anomaly: { box: [number, number, number, number]; class: string }) => {
-    // Optionally, call API to add anomaly here
-    if (onAnomalyAdded) {
-      onAnomalyAdded({ ...anomaly, confidence: 1 });
-    }
-    // You may want to POST to backend here
-    setShowAddModal(false);
-  };
-
   return (
     <div style={{ position: 'relative', width: STAGE_WIDTH, height: STAGE_HEIGHT }}>
-      {/* Floating Add Anomaly Button (top right) */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 10,
-          background: '#fff',
-          border: '1px solid #bbb',
-          borderRadius: '50%',
-          width: 36,
-          height: 36,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          cursor: 'pointer',
-        }}
-        title="Add Anomaly"
-      >
-        <Plus size={20} />
-      </button>
-
       {/* Floating Reset Zoom Button (bottom right) */}
       <button
         onClick={handleResetZoom}
@@ -289,32 +244,23 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
             const isHighlighted = highlightedAnomalyId && anomaly.id && highlightedAnomalyId === anomaly.id;
             if (!image) return null;
 
-            // Backend returns [x_center, y_center, width, height] format
-            // Convert to x, y, w, h for rendering
+            // Backend returns [x_center, y_center, width, height]
+            // Convert to [x1, y1, x2, y2] (two corner points in original image pixels)
             const [x_center, y_center, width, height] = anomaly.box;
-            const x = x_center - width / 2;
-            const y = y_center - height / 2;
-            const w = width;
-            const h = height;
+            const x1 = x_center - width / 2;
+            const y1 = y_center - height / 2;
+            const x2 = x_center + width / 2;
+            const y2 = y_center + height / 2;
+            const x = x1;
+            const y = y1;
+            const w = x2 - x1;
+            const h = y2 - y1;
 
             // Scale to match the displayed image size and add offset
             const displayX = x * imgScale + imgPos.x;
             const displayY = y * imgScale + imgPos.y;
             const displayW = w * imgScale;
             const displayH = h * imgScale;
-
-            // Enhanced debug logging for backend vs user-drawn anomalies
-            if (idx === 0) {
-              console.log('=== Rendering anomaly #0 ===');
-              console.log('  Source:', anomaly.madeBy || 'unknown');
-              console.log('  Original box [x_center, y_center, width, height]:', anomaly.box);
-              console.log('  Converted to x,y,w,h:', x, y, w, h);
-              console.log('  Image natural size:', image.width, 'x', image.height);
-              console.log('  imgScale:', imgScale);
-              console.log('  imgPos:', imgPos);
-              console.log('  Displayed image size:', image.width * imgScale, 'x', image.height * imgScale);
-              console.log('  Final canvas box:', { x: displayX, y: displayY, width: displayW, height: displayH });
-            }
 
             return (
               <Group key={anomaly.id || idx}>
@@ -332,20 +278,6 @@ export const ImageWithAnomalies: React.FC<ImageWithAnomaliesProps> = ({ imageUrl
           })}
         </Layer>
       </Stage>
-
-      {/* Add Anomaly Modal */}
-      <AddAnomalyModal
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={handleAddAnomaly}
-        imageUrl={imageUrl}
-        existingAnomalies={anomalies}
-        onEditAnomaly={onEditAnomaly}
-        onDeleteAnomaly={onDeleteAnomaly}
-      />
     </div>
   );
 };
-
-// Helper for Konva Image
-// import { Image as KonvaImage } from "react-konva";

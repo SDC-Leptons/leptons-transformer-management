@@ -58,6 +58,37 @@ export async function PATCH(
   }
 }
 
+export async function PUT(
+  request: Request,
+  context: { params: { id: string } }
+) {
+  const params = await context.params;
+  try {
+    const body = await request.json()
+    
+    const response = await fetch(`${API_BASE_URL}/api/maintenance/${params.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to update maintenance record')
+    }
+    
+    const data = await response.json()
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error('Error updating maintenance record:', error)
+    return NextResponse.json(
+      { error: 'Failed to update maintenance record' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: Request,
   context: { params: { id: string } }

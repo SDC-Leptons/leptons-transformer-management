@@ -774,4 +774,78 @@ public class InspectionService {
             }
         }).start();
     }
+
+    // New method: Get inspection by inspectionNumber
+    public ResponseEntity<String> getInspectionByNumber(String inspectionNumber) throws IOException {
+        if (inspectionNumber == null || inspectionNumber.trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"error\":\"inspectionNumber is required\"}");
+        }
+
+        String url = UriComponentsBuilder.fromHttpUrl(supabaseUrl)
+                .path("/rest/v1/inspections")
+                .queryParam("inspectionNumber", "eq." + inspectionNumber)
+                .queryParam("select", "*")
+                .queryParam("limit", "1")
+                .toUriString();
+
+        HttpHeaders headers = getHeaders();
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            List<Map<String, Object>> inspections = objectMapper.readValue(
+                    response.getBody(),
+                    new TypeReference<List<Map<String, Object>>>() {}
+            );
+
+            if (inspections.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"Inspection not found with inspectionNumber: " + inspectionNumber + "\"}");
+            }
+
+            String body = objectMapper.writeValueAsString(inspections.get(0));
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body);
+
+        } catch (HttpClientErrorException.NotFound e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"error\":\"Inspection not found with inspectionNumber: " + inspectionNumber + "\"}");
+        }
+    }
+
+    // New method: Get inspections by transformerNumber
+    public ResponseEntity<String> getInspectionsByTransformerNumber(String transformerNumber) throws IOException {
+        if (transformerNumber == null || transformerNumber.trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"error\":\"transformerNumber is required\"}");
+        }
+
+        String url = UriComponentsBuilder.fromHttpUrl(supabaseUrl)
+                .path("/rest/v1/inspections")
+                .queryParam("transformerNumber", "eq." + transformerNumber)
+                .queryParam("select", "*")
+                .toUriString();
+
+        HttpHeaders headers = getHeaders();
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            // Return the raw array of inspections (may be empty)
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response.getBody());
+        } catch (HttpClientErrorException.NotFound e) {
+            // Supabase 404 for no rows; normalize to empty list
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("[]");
+        }
+    }
 }

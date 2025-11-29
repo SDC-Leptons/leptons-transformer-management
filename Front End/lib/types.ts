@@ -54,3 +54,132 @@ export interface CreateInspectionRequest {
   branch?: string
   notes?: string
 }
+
+export interface ElectricalReadings {
+  voltage?: number
+  current?: number
+  power?: number
+  frequency?: number
+  resistance?: number
+  [key: string]: any // Allow dynamic properties
+}
+
+// Voltage and Current readings for R, Y, B phases (lowercase to match backend)
+export interface PhaseReadings {
+  r: number | null
+  y: number | null
+  b: number | null
+}
+
+export interface VoltageCurrentReadings {
+  voltage: PhaseReadings
+  current: PhaseReadings
+}
+
+// Work content checklist item (lowercase to match backend)
+export interface WorkContentItem {
+  no: number
+  c: boolean  // Check
+  ci: boolean // Clean
+  t: boolean  // Tight
+  r: boolean  // Replace
+  other: string
+  afterInspection: 'OK' | 'NOT_OK' | null
+  irNo: string
+}
+
+// Base line imaging references
+export interface BaseLineImagingNos {
+  right: string
+  left: string
+  front: string
+}
+
+// Meter details
+export interface MeterDetails {
+  serial: string
+  meterCTRatio: string
+  make: string
+}
+
+// Fuse status for each section
+export interface FuseStatus {
+  ok: boolean
+}
+
+export interface Maintenance {
+  mid: number
+  maintenanceNumber: string
+  inspectionNumber: string
+  inspectorName: string
+  status: string
+  electricalReadings: ElectricalReadings
+  recommendedActions: string
+  additionalRemarks: string
+  timestamp: string
+  // New expanded fields
+  branch?: string
+  locationDetails?: string
+  inspectionDate?: string
+  inspectionTime?: string
+  baseLineImagingNos?: BaseLineImagingNos
+  lastMonthKVA?: string
+  lastMonthDate?: string
+  lastMonthTime?: string
+  currentMonthKVA?: string
+  baseLineCondition?: 'Sunny' | 'Cloudy' | 'Rainy' | 'Night'
+  transformerType?: 'Bulk' | 'Single Phase' | 'Three Phase'
+  meterDetails?: MeterDetails
+  workContent?: WorkContentItem[]
+  firstInspectionReadings?: VoltageCurrentReadings
+  secondInspectionReadings?: VoltageCurrentReadings
+  afterThermalDate?: string
+  afterThermalTime?: string
+  fuseStatus?: {
+    fuse1: FuseStatus
+    fuse2: FuseStatus
+    fuse3: FuseStatus
+    fuse4: FuseStatus
+  }
+}
+
+export interface CreateMaintenanceRequest {
+  inspectionNumber: string
+  inspectorName: string
+  status: string
+  electricalReadings: ElectricalReadings
+  recommendedActions: string
+  additionalRemarks: string
+}
+
+export interface UpdateMaintenanceRequest {
+  inspectorName?: string
+  status?: string
+  electricalReadings?: ElectricalReadings
+  recommendedActions?: string
+  additionalRemarks?: string
+  // New expanded fields
+  branch?: string
+  locationDetails?: string
+  inspectionDate?: string
+  inspectionTime?: string
+  baseLineImagingNos?: BaseLineImagingNos
+  lastMonthKVA?: string
+  lastMonthDate?: string
+  lastMonthTime?: string
+  currentMonthKVA?: string
+  baseLineCondition?: 'Sunny' | 'Cloudy' | 'Rainy' | 'Night'
+  transformerType?: 'Bulk' | 'Single Phase' | 'Three Phase'
+  meterDetails?: MeterDetails
+  workContent?: WorkContentItem[]
+  firstInspectionReadings?: VoltageCurrentReadings
+  secondInspectionReadings?: VoltageCurrentReadings
+  afterThermalDate?: string
+  afterThermalTime?: string
+  fuseStatus?: {
+    fuse1: FuseStatus
+    fuse2: FuseStatus
+    fuse3: FuseStatus
+    fuse4: FuseStatus
+  }
+}

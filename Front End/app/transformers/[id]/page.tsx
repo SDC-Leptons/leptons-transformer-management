@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Plus, Star, Eye, Trash2, Check } from "lucide-react"
+import { ArrowLeft, Plus, Star, Eye, Trash2, Check, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,16 @@ type TransformerWithBaseline = {
   refImage?: string | null;
 };
 
+// Maintenance record type
+type MaintenanceRecord = {
+  mid: number;
+  maintenanceNumber: string;
+  inspectionNumber: string;
+  inspectorName: string;
+  status: string;
+  created_at: string;
+};
+
 import Link from "next/link"
 import { useParams } from "next/navigation"
 
@@ -36,8 +46,10 @@ export default function TransformerDetailPage() {
 
   const [transformer, setTransformer] = useState<TransformerWithBaseline | null>(null)
   const [inspections, setInspections] = useState<Inspection[]>([])
+  const [maintenances, setMaintenances] = useState<MaintenanceRecord[]>([])
   const [transformers, setTransformers] = useState<TransformerWithBaseline[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMaintenances, setLoadingMaintenances] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showBaselineModal, setShowBaselineModal] = useState(false)
   // Use baseline_image_url to determine if baseline image exists
@@ -83,9 +95,41 @@ export default function TransformerDetailPage() {
       // Set hasBaselineImage based on baseline_image_url
   setHasBaselineImage(!!(data_t.baselineImage && data_t.baselineImage !== ""))
       setLoading(false)
+      
+      // Fetch maintenances after inspections are loaded
+      const inspectionNumbers = mappedInspections.map((ins: Inspection) => ins.inspection_no)
+      if (inspectionNumbers.length > 0) {
+        fetchMaintenances(inspectionNumbers)
+      } else {
+        setLoadingMaintenances(false)
+      }
     } catch (error) {
       console.error("Failed to fetch transformer:", error)
       setLoading(false)
+      setLoadingMaintenances(false)
+    }
+  }
+
+  // Fetch all maintenances and filter by inspection numbers
+  const fetchMaintenances = async (inspectionNumbers: string[]) => {
+    setLoadingMaintenances(true)
+    try {
+      const response = await fetch("/api/maintenance")
+      if (!response.ok) {
+        throw new Error("Failed to fetch maintenances")
+      }
+      const allMaintenances = await response.json()
+      
+      // Filter maintenances that have inspectionNumber matching any of our inspection numbers
+      const filteredMaintenances = allMaintenances.filter((m: MaintenanceRecord) => 
+        inspectionNumbers.includes(m.inspectionNumber)
+      )
+      
+      setMaintenances(filteredMaintenances)
+    } catch (error) {
+      console.error("Failed to fetch maintenances:", error)
+    } finally {
+      setLoadingMaintenances(false)
     }
   }
 
@@ -182,20 +226,48 @@ export default function TransformerDetailPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Completed":
+      case "completed":
         return (
           <Badge variant="secondary" className="bg-purple-100 text-purple-700">
             Completed
           </Badge>
         )
       case "In Progress":
+      case "in-progress":
         return (
           <Badge variant="secondary" className="bg-green-100 text-green-700">
             In Progress
           </Badge>
         )
       case "Pending":
+      case "pending":
         return (
           <Badge variant="secondary" className="bg-red-100 text-red-700">
+            Pending
+          </Badge>
+        )
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  }
+
+  const getMaintenanceStatusBadge = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "completed":
+        return (
+          <Badge variant="secondary" className="bg-green-100 text-green-700">
+            Completed
+          </Badge>
+        )
+      case "in-progress":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            In Progress
+          </Badge>
+        )
+      case "pending":
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
             Pending
           </Badge>
         )
@@ -417,6 +489,65 @@ export default function TransformerDetailPage() {
                       <TableCell>{getStatusBadge(inspection.status)}</TableCell>
                       <TableCell className="text-right">
                         <Link href={`/inspections/${inspection.id}`}>
+                          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
+                            View
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Maintenance Records */}
+          <div className="flex items-center justify-between mb-4 mt-8">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-indigo-600" />
+              Maintenance Records
+            </h3>
+          </div>
+
+          <div className="bg-white rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Maintenance No ↓</TableHead>
+                  <TableHead>Inspection No</TableHead>
+                  <TableHead>Inspector</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">View</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingMaintenances ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      Loading maintenance records...
+                    </TableCell>
+                  </TableRow>
+                ) : maintenances.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      No maintenance records found for this transformer
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  maintenances.map((maintenance) => (
+                    <TableRow key={maintenance.mid}>
+                      <TableCell className="font-medium">{maintenance.maintenanceNumber}</TableCell>
+                      <TableCell>
+                        <Link href={`/inspections/${maintenance.inspectionNumber}`} className="text-indigo-600 hover:underline">
+                          {maintenance.inspectionNumber}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{maintenance.inspectorName || "-"}</TableCell>
+                      <TableCell>{maintenance.created_at ? formatDate(maintenance.created_at) : "-"}</TableCell>
+                      <TableCell>{getMaintenanceStatusBadge(maintenance.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <Link href={`/maintenances/${maintenance.mid}`}>
                           <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
                             View
                           </Button>

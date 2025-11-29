@@ -59,8 +59,8 @@ export const EditAnomalyModal: React.FC<EditAnomalyModalProps> = ({ open, onClos
       const offsetY = (STAGE_HEIGHT - displayHeight) / 2;
       setImageOffset({ x: offsetX, y: offsetY });
       
-  // Backend returns [x_center, y_center, width, height]
-  // Convert to [x1, y1, x2, y2] (two corner points), then scale to canvas coordinates
+  // Backend returns [x_center, y_center, width, height] format
+  // Convert to canvas coordinates
   const [x_center, y_center, width, height] = anomaly.box;
   const x1 = x_center - width / 2;
   const y1 = y_center - height / 2;
@@ -169,7 +169,7 @@ export const EditAnomalyModal: React.FC<EditAnomalyModalProps> = ({ open, onClos
   const handleUpdate = () => {
     if (!box || !image) return;
     // Convert canvas box [x1, y1, x2, y2] back to original image coordinates
-    // Backend expects [x1, y1, x2, y2] format
+    // Backend expects [x_center, y_center, width, height] format
     const scale = Math.min(imageDisplaySize.width / image.width, imageDisplaySize.height / image.height);
     
     const x1 = (Math.min(box[0], box[2]) - imageOffset.x) / scale;
@@ -177,7 +177,13 @@ export const EditAnomalyModal: React.FC<EditAnomalyModalProps> = ({ open, onClos
     const x2 = (Math.max(box[0], box[2]) - imageOffset.x) / scale;
     const y2 = (Math.max(box[1], box[3]) - imageOffset.y) / scale;
     
-    const normBox: [number, number, number, number] = [x1, y1, x2, y2];
+    // Convert to [x_center, y_center, width, height] format to match backend
+    const width = x2 - x1;
+    const height = y2 - y1;
+    const x_center = x1 + width / 2;
+    const y_center = y1 + height / 2;
+    
+    const normBox: [number, number, number, number] = [x_center, y_center, width, height];
     onUpdate({ box: normBox, class: selectedType });
   };
 

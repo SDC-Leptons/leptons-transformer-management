@@ -13,6 +13,8 @@ public class Maintenance {
     private String recommendedActions;
     private String additionalRemarks;
     private Date createdAt;
+    // Single JSON column to store extended maintenance information used by the new UI
+    private Map<String, Object> details;
 
     // Constructors
     public Maintenance() {
@@ -20,7 +22,7 @@ public class Maintenance {
 
     public Maintenance(Long mid, String maintenanceNumber, String inspectionNumber, String inspectorName,
                        String status, Map<String, Object> electricalReadings, String recommendedActions,
-                       String additionalRemarks, Date createdAt) {
+                       String additionalRemarks, Date createdAt, Map<String, Object> details) {
         this.mid = mid;
         this.maintenanceNumber = maintenanceNumber;
         this.inspectionNumber = inspectionNumber;
@@ -30,6 +32,7 @@ public class Maintenance {
         this.recommendedActions = recommendedActions;
         this.additionalRemarks = additionalRemarks;
         this.createdAt = createdAt;
+        this.details = details;
     }
 
     // Getters and Setters
@@ -103,5 +106,13 @@ public class Maintenance {
 
     public void setCreatedAt(Date createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Map<String, Object> getDetails() {
+        return details;
+    }
+
+    public void setDetails(Map<String, Object> details) {
+        this.details = details;
     }
 }
